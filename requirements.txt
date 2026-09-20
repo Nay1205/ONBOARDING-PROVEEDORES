@@ -1,0 +1,4 @@
+pytesseract>=0.3.13
+pillow>=11.0
+pymupdf>=1.24
+openpyxl>=3.1

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Datos reales de proveedores: nunca se suben al repo (contienen CURP, RFC,
+# telefonos y correos de personas). Solo se versiona el codigo.
+*.xlsx
+*.xls
+*.zip
+/entrada/
+/salida/
+/debug_ocr/
