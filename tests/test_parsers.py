@@ -50,6 +50,28 @@ class TestParsers(unittest.TestCase):
             "NISSAN",
         )
 
+    def test_find_placas_valor(self):
+        self.assertEqual(parsers.find_placas("Marca: FORD Placas: ABC1234"), "ABC1234")
+
+    def test_find_placas_na(self):
+        self.assertEqual(parsers.find_placas("Modelo: 2025 Placas: NA"), "NA")
+
+    def test_find_numero_poliza(self):
+        texto = "PRA ENU ERO DE POLIZA 01974\nOtros datos"
+        self.assertEqual(parsers.find_numero_poliza(texto), "01974")
+
+    def test_find_numero_poliza_ignora_montos(self):
+        texto = "Derecho de poliza $650.00\nFin de vigencia: 06/10/2026"
+        self.assertIsNone(parsers.find_numero_poliza(texto))
+
+    def test_find_numero_licencia(self):
+        texto = "No. de licencia: 12345678\nOtros datos"
+        self.assertEqual(parsers.find_numero_licencia(texto), "12345678")
+
+    def test_find_expiracion_seguro(self):
+        texto = "Fin de vigencia: 06/10/2026 Recargo: 0%"
+        self.assertEqual(parsers.find_expiracion_seguro(texto), "06/10/2026")
+
 
 if __name__ == "__main__":
     unittest.main()
