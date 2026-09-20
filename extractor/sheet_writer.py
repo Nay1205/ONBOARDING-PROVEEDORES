@@ -4,7 +4,6 @@ cliente correspondiente, dentro del archivo de Excel de proveedores.
 import re
 import shutil
 import unicodedata
-from datetime import date
 from pathlib import Path
 
 import openpyxl
@@ -40,13 +39,22 @@ def _clasificar_encabezado(header_norm: str) -> str | None:
         return "aseguradora"
     if h == "SEGURO" or ("POLIZA" in h and "SEGURO" in h and "NUMERO" not in h):
         return "aseguradora"
-    if "COMENTARIOS" in h or "COMETARIOS" in h:
-        return "comentarios"
-    if "CAPTURO" in h:
-        return "capturo"
-    if "FECHA" in h and "INGRESO" in h:
-        return "fecha_ingreso"
+    if "LICENCIA" in h:
+        return "num_licencia"
+    if "POLIZA" in h and "NUMERO" in h:
+        return "numero_poliza"
+    if "EXPIRACION" in h and "SEGURO" in h:
+        return "exp_seguro"
     return None
+
+
+AMARILLO_RGB = "FFFFFF00"
+
+
+def _es_amarillo(celda) -> bool:
+    fill = celda.fill
+    color = fill.fgColor if fill else None
+    return bool(color and color.type == "rgb" and color.rgb == AMARILLO_RGB)
 
 
 def _fila_vacia(ws, fila: int) -> bool:
@@ -59,13 +67,11 @@ def obtener_copia_de_prueba(excel_original: Path, salida: Path) -> Path:
     return salida
 
 
-def escribir_registro(
-    archivo_excel: Path,
-    hoja: str,
-    valores: dict,
-    pendientes: list[str],
-) -> int:
-    """Agrega `valores` como un renglon nuevo en `hoja`. Devuelve el numero de fila escrita."""
+def escribir_registro(archivo_excel: Path, hoja: str, valores: dict) -> int:
+    """Agrega `valores` como un renglon nuevo en `hoja`, pero solo en las
+    columnas cuyo encabezado esta resaltado en amarillo (la senal que usa
+    el equipo para marcar 'esto se llena automatico'). Devuelve el numero
+    de fila escrita."""
     wb = openpyxl.load_workbook(archivo_excel)
     if hoja not in wb.sheetnames:
         raise ValueError(
@@ -75,7 +81,7 @@ def escribir_registro(
 
     columna_por_campo: dict[str, int] = {}
     for celda in ws[1]:
-        if celda.value is None:
+        if celda.value is None or not _es_amarillo(celda):
             continue
         campo = _clasificar_encabezado(_normalizar(str(celda.value)))
         if campo and campo not in columna_por_campo:
@@ -87,15 +93,7 @@ def escribir_registro(
             fila_destino = fila
             break
 
-    datos_a_escribir = dict(valores)
-    datos_a_escribir.setdefault("fecha_ingreso", date.today().strftime("%d/%m/%Y"))
-    datos_a_escribir.setdefault("capturo", "EXTRACTOR AUTOMATICO")
-    if pendientes:
-        datos_a_escribir.setdefault(
-            "comentarios", "Revisar: " + "; ".join(pendientes)
-        )
-
-    for campo, valor in datos_a_escribir.items():
+    for campo, valor in valores.items():
         columna = columna_por_campo.get(campo)
         if columna and valor:
             ws.cell(row=fila_destino, column=columna, value=valor)

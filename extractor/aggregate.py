@@ -65,6 +65,8 @@ def procesar_carpeta_proveedor(carpeta: Path) -> ResultadoExtraccion:
     for tipo, texto, filename in texto_por_zona["driver"]:
         if tipo in ("INE", "LICENCIA"):
             valores.setdefault("curp_driver", parsers.find_curp(texto))
+        if tipo == "LICENCIA":
+            valores.setdefault("num_licencia", parsers.find_numero_licencia(texto))
         if tipo == "CSF":
             valores.setdefault("rfc_driver", parsers.find_rfc(texto, "fisica"))
 
@@ -76,12 +78,15 @@ def procesar_carpeta_proveedor(carpeta: Path) -> ResultadoExtraccion:
             valores.setdefault("marca", parsers.find_marca(texto, parsers.MARCAS_CONOCIDAS))
         if tipo == "SEGURO":
             valores.setdefault("aseguradora", parsers.find_aseguradora(texto))
+            valores.setdefault("numero_poliza", parsers.find_numero_poliza(texto))
+            valores.setdefault("exp_seguro", parsers.find_expiracion_seguro(texto))
             if valores.get("placas") is None:
                 valores["placas"] = parsers.find_placas(texto)
 
     campos_esperados = [
         "nombre_proveedor", "rfc_proveedor", "nombre_driver", "curp_driver",
-        "rfc_driver", "placas", "anio", "marca", "aseguradora",
+        "rfc_driver", "num_licencia", "placas", "anio", "marca",
+        "aseguradora", "numero_poliza", "exp_seguro",
     ]
     for campo in campos_esperados:
         if not valores.get(campo):

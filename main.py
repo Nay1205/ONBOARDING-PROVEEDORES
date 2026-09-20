@@ -20,10 +20,13 @@ CAMPOS_LEGIBLES = {
     "nombre_driver": "Nombre del driver",
     "curp_driver": "CURP del driver",
     "rfc_driver": "RFC del driver",
+    "num_licencia": "Número de licencia",
     "placas": "Placas",
     "anio": "Año",
     "marca": "Marca",
     "aseguradora": "Aseguradora",
+    "numero_poliza": "Número de póliza",
+    "exp_seguro": "Expiración del seguro",
 }
 
 
@@ -81,7 +84,13 @@ def main():
             print(f"  - {pendiente}")
 
     salida = obtener_copia_de_prueba(excel_original, Path(args.salida))
-    fila = escribir_registro(salida, args.cliente, resultado.valores, resultado.pendientes)
+    try:
+        fila = escribir_registro(salida, args.cliente, resultado.valores)
+    except PermissionError:
+        sys.exit(
+            f"\nNo se pudo guardar: '{salida}' esta abierto en Excel. "
+            "Cierralo e intenta de nuevo."
+        )
     print(f"\nListo. Renglon escrito en fila {fila} de la pestana '{args.cliente}' en:\n  {salida}")
 
 
