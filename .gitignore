@@ -11,7 +11,9 @@ __pycache__/
 *.jpg
 *.jpeg
 *.png
+*.csv
 drive-download*/
+LICENCIAS*/
 /entrada/
 /salida/
 /debug_ocr/
