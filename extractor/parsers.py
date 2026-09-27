@@ -37,6 +37,28 @@ def find_curp(text: str) -> str | None:
     return None
 
 
+def find_curp_candidato(text: str) -> tuple[str | None, bool]:
+    """Como find_curp, pero si el OCR quedo demasiado ruidoso para validar
+    el formato exacto, regresa el mejor candidato encontrado marcado como
+    'sin validar' en vez de dejarlo vacio. Devuelve (valor, validado)."""
+    curp = find_curp(text)
+    if curp:
+        return curp, True
+
+    # Solo se acepta un candidato "sin validar" si esta pegado a la
+    # etiqueta CURP explicita: buscar cualquier bloque largo de texto sin
+    # esa ancla produce puros falsos positivos (palabras vecinas pegadas).
+    lineas = text.upper().splitlines()
+    for i, linea in enumerate(lineas):
+        if "CURP" not in linea:
+            continue
+        zona = (linea + lineas[i + 1] if i + 1 < len(lineas) else linea)
+        zona = re.sub(r"[^A-Z0-9]", "", zona.replace("CURP", ""))
+        if 16 <= len(zona) <= 19:
+            return zona, False
+    return None, False
+
+
 def find_rfc(text: str, persona: str = "fisica") -> str | None:
     upper = text.upper()
     pattern = RFC_FISICA_RE if persona == "fisica" else RFC_MORAL_RE
@@ -93,13 +115,25 @@ def find_numero_poliza(text: str) -> str | None:
     return None
 
 
+_ETIQUETAS_NUM_LICENCIA = (
+    "NUMERO DE LICENCIA", "NÚMERO DE LICENCIA", "NO. DE LICENCIA",
+    "NO DE LICENCIA", "LICENSE ID", "FOLIO",
+)
+_CODIGO_LICENCIA_RE = re.compile(r"\b[A-Z]{0,3}\d{6,12}\b")
+
+
 def find_numero_licencia(text: str) -> str | None:
-    """Numero junto a las palabras LICENCIA / FOLIO / NUM, sin ser una fecha."""
-    for linea in text.splitlines():
-        upper = linea.upper()
-        if not any(k in upper for k in ("LICENCIA", "FOLIO", "NUM")):
+    """Codigo junto a una etiqueta especifica (NUMERO DE LICENCIA, FOLIO,
+    LICENSE ID...). No usa la palabra suelta 'LICENCIA' porque aparece en
+    el titulo de la credencial y agarraria cualquier numero cercano."""
+    lineas = text.upper().splitlines()
+    for i, linea in enumerate(lineas):
+        if not any(etq in linea for etq in _ETIQUETAS_NUM_LICENCIA):
             continue
-        for match in re.finditer(r"(?<![\d/])\d{5,12}(?![\d/])", linea):
+        match = _CODIGO_LICENCIA_RE.search(linea)
+        if not match and i + 1 < len(lineas):
+            match = _CODIGO_LICENCIA_RE.search(lineas[i + 1])
+        if match:
             return match.group(0)
     return None
 
@@ -116,6 +150,80 @@ def find_expiracion_seguro(text: str) -> str | None:
             if match:
                 return match.group(0)
     return None
+
+
+_ETIQUETAS_NOMBRE = ("NOMBRE", "NAME")
+_ETIQUETAS_CORTE_NOMBRE = (
+    "CURP", "DOMICILIO", "ADDRESS", "EXPEDIC", "VIGENC", "FOLIO",
+    "LICENCIA", "NACIMIENTO", "TIPO", "CLASS", "ANTIGUEDAD",
+)
+
+
+def find_nombre_licencia(text: str) -> str | None:
+    """Nombre justo despues de una etiqueta NOMBRE/NAME. Puede venir en 1 o
+    2 lineas seguidas, hasta toparse con la siguiente etiqueta del formato."""
+    lineas = text.splitlines()
+    for i, linea in enumerate(lineas):
+        upper = linea.upper()
+        if not any(etq in upper for etq in _ETIQUETAS_NOMBRE):
+            continue
+        partes = []
+        for candidata in lineas[i + 1 : i + 4]:
+            cand_upper = candidata.upper()
+            if not candidata.strip():
+                break
+            if any(corte in cand_upper for corte in _ETIQUETAS_CORTE_NOMBRE):
+                break
+            if any(c.isdigit() for c in candidata):
+                break
+            letras = re.sub(r"[^A-ZÑ ]", "", cand_upper).strip()
+            if len(letras) < 2:
+                break
+            partes.append(letras)
+        if partes:
+            return " ".join(partes)
+    return None
+
+
+def derive_nombre_desde_archivo(nombre_archivo: str) -> str:
+    """Deriva el nombre de la persona a partir del nombre del archivo,
+    ej. 'LICENCIA_JAIME CANO (1).jpeg' -> 'JAIME CANO'. Sirve como
+    respaldo cuando el formato de la licencia no trae una etiqueta NOMBRE
+    clara para anclar el OCR."""
+    base = re.sub(r"\.[A-Za-z0-9]+$", "", nombre_archivo).upper()
+    base = re.sub(r"^LICEN+CIA[_\s]*", "", base)
+    base = re.sub(r"\bDRIVER\b", " ", base)
+    base = re.sub(r"\(\d+\)", " ", base)
+    base = re.sub(r"\b\d+\b", " ", base)
+    base = base.replace("_", " ")
+    return re.sub(r"\s+", " ", base).strip()
+
+
+def find_vigencia_licencia(text: str) -> str | None:
+    """La fecha de vigencia/expiracion es, en cualquier formato de estado,
+    la fecha mas lejana en el futuro impresa en la credencial (la de
+    expedicion y la de nacimiento siempre son anteriores). Se excluye la
+    fecha pegada a la etiqueta de nacimiento para no confundirla."""
+    lineas = text.upper().splitlines()
+    excluidas = set()
+    for i, linea in enumerate(lineas):
+        if "NACIMIENTO" in linea:
+            excluidas.add(i)
+            excluidas.add(i + 1)
+
+    fechas = []
+    for i, linea in enumerate(lineas):
+        if i in excluidas:
+            continue
+        fechas.extend(m.group(0) for m in FECHA_RE.finditer(linea))
+    if not fechas:
+        return None
+
+    def anio_de(fecha: str) -> int:
+        anio = re.split(r"[/\-.]", fecha)[2]
+        return int(anio) + 2000 if len(anio) == 2 else int(anio)
+
+    return max(fechas, key=anio_de)
 
 
 def find_anio(text: str) -> str | None:
